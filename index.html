@@ -1,0 +1,1107 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Study Tracker — Ingeniería Aeroespacial</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+<!-- Firebase SDK -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getFirestore, doc, setDoc, getDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+  // ══════════════════════════════════════════════
+  // CONFIGURACIÓN FIREBASE — RELLENA ESTOS VALORES
+  // ══════════════════════════════════════════════
+  const firebaseConfig = {
+    apiKey:            "AIzaSyD7U3kufM1SJY7iD7L4N6kErYV2Xm6Kbok",
+    authDomain:        "tracker-miguel.firebaseapp.com",
+    projectId:         "tracker-miguel",
+    storageBucket:     "tracker-miguel.firebasestorage.app",
+    messagingSenderId: "914863873073",
+    appId:             "1:914863873073:web:58fc8c2a1483261e908910"
+  };
+
+
+  const app = initializeApp(firebaseConfig);
+  const db  = getFirestore(app);
+
+  const DOC_REF = doc(db, "tracker", "miguel");
+
+  // Save full state to Firestore
+  window._saveToCloud = async (data) => {
+    try {
+      await setDoc(DOC_REF, { payload: JSON.stringify(data), ts: Date.now() });
+    } catch(e) { console.warn("Cloud save failed:", e); }
+  };
+
+  // Load from Firestore on start
+  window._loadFromCloud = async () => {
+    try {
+      const snap = await getDoc(DOC_REF);
+      if (snap.exists()) {
+        const raw = snap.data().payload;
+        return raw ? JSON.parse(raw) : null;
+      }
+    } catch(e) { console.warn("Cloud load failed:", e); }
+    return null;
+  };
+
+  // Real-time listener (syncs across devices)
+  window._listenCloud = (callback) => {
+    onSnapshot(DOC_REF, (snap) => {
+      if (snap.exists()) {
+        try {
+          const data = JSON.parse(snap.data().payload);
+          callback(data);
+        } catch(e) {}
+      }
+    });
+  };
+
+  window._firebaseReady = true;
+  document.dispatchEvent(new Event("firebase-ready"));
+</script>
+
+<style>
+:root {
+  --bg:          #0a0e1a;
+  --bg2:         #0f1625;
+  --bg3:         #141d30;
+  --panel:       #111827;
+  --border:      #1e2d45;
+  --border2:     #243350;
+  --accent:      #3b82f6;
+  --accent2:     #60a5fa;
+  --gold:        #f59e0b;
+  --gold2:       #fbbf24;
+  --green:       #10b981;
+  --green2:      #34d399;
+  --orange:      #f97316;
+  --red:         #ef4444;
+  --red2:        #f87171;
+  --text:        #e2e8f0;
+  --text2:       #94a3b8;
+  --text3:       #475569;
+  --mono:        'Space Mono', monospace;
+  --sans:        'DM Sans', sans-serif;
+  --radius:      8px;
+  --radius2:     12px;
+  --transition:  0.18s ease;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 14px;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ─── GRID LAYOUT ─── */
+.app {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  grid-template-rows: 56px 1fr;
+  min-height: 100vh;
+}
+
+/* ─── TOPBAR ─── */
+.topbar {
+  grid-column: 1 / -1;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  gap: 16px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.topbar-logo {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--accent2);
+  letter-spacing: 0.08em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.topbar-logo span { color: var(--text3); }
+.topbar-status {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text3);
+  font-family: var(--mono);
+}
+.status-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--text3);
+  transition: background 0.3s;
+}
+.status-dot.synced  { background: var(--green); box-shadow: 0 0 6px var(--green); }
+.status-dot.saving  { background: var(--gold);  box-shadow: 0 0 6px var(--gold);  animation: pulse 0.8s infinite; }
+.status-dot.offline { background: var(--red);   box-shadow: 0 0 6px var(--red);   }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+.firebase-warning {
+  display: none;
+  background: linear-gradient(90deg, #1a0f00, #2a1800);
+  border: 1px solid var(--orange);
+  border-radius: var(--radius);
+  padding: 6px 12px;
+  font-size: 11px;
+  color: var(--orange);
+  font-family: var(--mono);
+}
+.firebase-warning.show { display: flex; align-items: center; gap: 8px; }
+
+/* ─── SIDEBAR ─── */
+.sidebar {
+  background: var(--bg2);
+  border-right: 1px solid var(--border);
+  padding: 16px 0;
+  overflow-y: auto;
+  position: sticky;
+  top: 56px;
+  height: calc(100vh - 56px);
+}
+.sidebar-section {
+  padding: 6px 16px 4px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text3);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.subject-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 16px;
+  background: transparent;
+  border: none;
+  border-left: 3px solid transparent;
+  cursor: pointer;
+  text-align: left;
+  transition: all var(--transition);
+  color: var(--text2);
+  font-family: var(--sans);
+  font-size: 13px;
+}
+.subject-btn:hover { background: var(--bg3); color: var(--text); }
+.subject-btn.active {
+  background: linear-gradient(90deg, rgba(59,130,246,0.12), transparent);
+  border-left-color: var(--accent);
+  color: var(--text);
+}
+.subject-btn .subj-icon {
+  font-size: 14px;
+  flex-shrink: 0;
+}
+.subject-btn .subj-name {
+  flex: 1;
+  line-height: 1.3;
+  font-size: 12px;
+}
+.subject-btn .subj-pct {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text3);
+  flex-shrink: 0;
+}
+.subject-btn.active .subj-pct { color: var(--accent2); }
+
+.sidebar-review-btn {
+  margin: 12px 16px 0;
+  width: calc(100% - 32px);
+  padding: 9px 12px;
+  background: rgba(59,130,246,0.1);
+  border: 1px solid rgba(59,130,246,0.25);
+  border-radius: var(--radius);
+  color: var(--accent2);
+  font-family: var(--mono);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all var(--transition);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.sidebar-review-btn:hover { background: rgba(59,130,246,0.2); }
+.urgent-badge {
+  background: var(--red);
+  color: white;
+  border-radius: 99px;
+  padding: 1px 6px;
+  font-size: 10px;
+  margin-left: auto;
+}
+
+/* ─── MAIN ─── */
+.main {
+  padding: 24px;
+  overflow-y: auto;
+  height: calc(100vh - 56px);
+}
+
+/* ─── SUBJECT HEADER ─── */
+.subject-header {
+  margin-bottom: 20px;
+}
+.subject-title {
+  font-family: var(--mono);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.01em;
+  margin-bottom: 12px;
+}
+.progress-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.progress-bar-wrap {
+  flex: 1;
+  height: 6px;
+  background: var(--bg3);
+  border-radius: 99px;
+  overflow: hidden;
+}
+.progress-bar-fill {
+  height: 100%;
+  border-radius: 99px;
+  background: var(--text3);
+  transition: width 0.5s ease, background 0.5s ease;
+}
+.progress-bar-fill.orange { background: var(--orange); }
+.progress-bar-fill.green  {
+  background: linear-gradient(90deg, var(--green), var(--green2));
+  box-shadow: 0 0 8px var(--green);
+}
+.progress-pct {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--text2);
+  width: 44px;
+  text-align: right;
+}
+.progress-detail {
+  font-size: 12px;
+  color: var(--text3);
+}
+
+/* ─── TOOLBAR ─── */
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border2);
+  background: var(--bg3);
+  color: var(--text2);
+  font-family: var(--sans);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all var(--transition);
+  white-space: nowrap;
+}
+.btn:hover { border-color: var(--accent); color: var(--text); }
+.btn.primary {
+  background: rgba(59,130,246,0.15);
+  border-color: rgba(59,130,246,0.4);
+  color: var(--accent2);
+}
+.btn.primary:hover { background: rgba(59,130,246,0.25); }
+.btn-icon { font-size: 14px; }
+
+/* ─── TABLE ─── */
+.table-wrap {
+  overflow-x: auto;
+  border-radius: var(--radius2);
+  border: 1px solid var(--border);
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 720px;
+}
+thead th {
+  background: var(--bg3);
+  padding: 10px 12px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text3);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  text-align: center;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+thead th:nth-child(2) { text-align: left; }
+
+tbody tr {
+  border-bottom: 1px solid var(--border);
+  transition: background var(--transition);
+  position: relative;
+}
+tbody tr:last-child { border-bottom: none; }
+tbody tr:hover { background: rgba(255,255,255,0.025); }
+tbody tr.important-row { background: rgba(245,158,11,0.06); }
+tbody tr.important-row:hover { background: rgba(245,158,11,0.10); }
+tbody tr.flash-green {
+  animation: flashGreen 0.6s ease;
+}
+@keyframes flashGreen {
+  0%   { background: rgba(16,185,129,0.35); }
+  100% { background: transparent; }
+}
+
+td {
+  padding: 9px 12px;
+  text-align: center;
+  vertical-align: middle;
+}
+td:nth-child(2) { text-align: left; }
+
+/* star */
+.star-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  transition: transform 0.15s;
+  color: var(--text3);
+}
+.star-btn:hover { transform: scale(1.2); }
+.star-btn.on { color: var(--gold2); text-shadow: 0 0 8px var(--gold); }
+
+/* topic name */
+.topic-name {
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  transition: background var(--transition);
+}
+.topic-name:hover { background: var(--bg3); }
+.topic-edit {
+  background: var(--bg3);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 13px;
+  padding: 2px 6px;
+  width: 100%;
+  outline: none;
+}
+
+/* checkboxes */
+.check-btn {
+  width: 28px; height: 28px;
+  border-radius: 6px;
+  border: 1.5px solid var(--border2);
+  background: transparent;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all var(--transition);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.check-btn.checked-green {
+  background: rgba(16,185,129,0.15);
+  border-color: var(--green);
+  color: var(--green2);
+}
+.check-btn.checked-orange {
+  background: rgba(249,115,22,0.15);
+  border-color: var(--orange);
+  color: var(--orange);
+}
+.check-btn:hover { border-color: var(--accent); }
+
+/* repaso btn */
+.repaso-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 99px;
+  border: 1px solid var(--border2);
+  background: var(--bg3);
+  color: var(--text2);
+  font-family: var(--mono);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+.repaso-btn:hover { border-color: var(--accent); color: var(--accent2); }
+.repaso-count { font-weight: 700; color: var(--accent2); }
+
+/* confianza */
+.conf-select {
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  border-radius: 6px;
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 12px;
+  padding: 4px 8px;
+  cursor: pointer;
+  outline: none;
+  transition: all var(--transition);
+}
+.conf-select:focus { border-color: var(--accent); }
+.conf-select.bajo   { border-color: var(--red);    color: var(--red2);   background: rgba(239,68,68,0.08); }
+.conf-select.medio  { border-color: var(--orange);  color: var(--orange); background: rgba(249,115,22,0.08); }
+.conf-select.alto   { border-color: var(--green);   color: var(--green2); background: rgba(16,185,129,0.08); }
+
+/* date */
+.date-cell { font-family: var(--mono); font-size: 11px; color: var(--text3); }
+
+/* urgencia badge */
+.urgencia-badge {
+  display: inline-block;
+  padding: 3px 9px;
+  border-radius: 99px;
+  font-size: 10px;
+  font-family: var(--mono);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+.urgencia-badge.urgente { background: rgba(239,68,68,0.15);  color: var(--red2);   border: 1px solid rgba(239,68,68,0.3);  }
+.urgencia-badge.pronto  { background: rgba(249,115,22,0.15); color: var(--orange); border: 1px solid rgba(249,115,22,0.3); }
+.urgencia-badge.aldia   { background: rgba(16,185,129,0.12); color: var(--green2); border: 1px solid rgba(16,185,129,0.25);}
+.urgencia-badge.none    { background: var(--bg3); color: var(--text3); border: 1px solid var(--border); }
+
+/* delete btn */
+.del-btn {
+  opacity: 0;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--red);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 4px 6px;
+  transition: all var(--transition);
+}
+tr:hover .del-btn { opacity: 1; }
+.del-btn:hover { background: rgba(239,68,68,0.12); border-color: var(--red); }
+
+/* ─── REVIEW PANEL ─── */
+.review-panel { display: none; }
+.review-panel.active { display: block; }
+.review-title {
+  font-family: var(--mono);
+  font-size: 14px;
+  color: var(--text2);
+  margin-bottom: 16px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.review-cards {
+  display: grid;
+  gap: 10px;
+}
+.review-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius2);
+  padding: 14px 16px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px;
+  transition: border-color var(--transition);
+}
+.review-card:hover { border-color: var(--border2); }
+.review-card-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.review-card-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+}
+.review-card-subj {
+  font-size: 11px;
+  color: var(--text3);
+  font-family: var(--mono);
+}
+.review-card-when {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text2);
+  text-align: right;
+  align-self: center;
+}
+.review-empty {
+  text-align: center;
+  color: var(--text3);
+  font-family: var(--mono);
+  font-size: 13px;
+  padding: 48px 0;
+}
+
+/* ─── MOBILE ─── */
+@media (max-width: 680px) {
+  .app { grid-template-columns: 1fr; }
+  .sidebar {
+    position: fixed;
+    left: -240px;
+    top: 56px;
+    z-index: 200;
+    transition: left 0.25s ease;
+    height: calc(100% - 56px);
+  }
+  .sidebar.open { left: 0; box-shadow: 4px 0 24px rgba(0,0,0,0.5); }
+  .menu-btn { display: flex !important; }
+  .main { height: auto; padding: 16px; }
+  .app { grid-template-rows: 56px 1fr; }
+}
+.menu-btn {
+  display: none;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text2);
+  padding: 6px 8px;
+  cursor: pointer;
+  font-size: 16px;
+}
+
+/* ─── SCROLLBAR ─── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text3); }
+</style>
+</head>
+<body>
+<div class="app" id="app">
+
+  <!-- TOPBAR -->
+  <header class="topbar">
+    <button class="menu-btn" id="menuBtn">☰</button>
+    <div class="topbar-logo">
+      <span>✦</span> STUDY TRACKER <span>/ AEI</span>
+    </div>
+    <div class="firebase-warning" id="firebaseWarning">
+      ⚠ Firebase no configurado — los datos solo se guardan localmente
+    </div>
+    <div class="topbar-status">
+      <div class="status-dot" id="statusDot"></div>
+      <span id="statusText">local</span>
+    </div>
+  </header>
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-section">Asignaturas</div>
+    <div id="subjectList"></div>
+    <div style="padding: 16px 16px 0;">
+      <button class="sidebar-review-btn" id="reviewToggleBtn">
+        📋 Ver repasos
+        <span class="urgent-badge" id="urgentBadge" style="display:none">0</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main" id="main">
+    <div id="subjectView">
+      <div class="subject-header">
+        <div class="subject-title" id="subjectTitle">—</div>
+        <div class="progress-row">
+          <div class="progress-bar-wrap">
+            <div class="progress-bar-fill" id="progressFill" style="width:0%"></div>
+          </div>
+          <div class="progress-pct" id="progressPct">0%</div>
+          <div class="progress-detail" id="progressDetail"></div>
+        </div>
+      </div>
+      <div class="toolbar">
+        <button class="btn primary" id="addTopicBtn">
+          <span class="btn-icon">＋</span> Añadir tema
+        </button>
+        <button class="btn" id="sortStarsBtn">
+          <span class="btn-icon">★</span> Estrellas arriba
+        </button>
+      </div>
+      <div class="table-wrap">
+        <table id="topicsTable">
+          <thead>
+            <tr>
+              <th>★</th>
+              <th>TEMA</th>
+              <th>EN CLASE</th>
+              <th>ESTUDIADO</th>
+              <th>REPASOS</th>
+              <th>CONFIANZA</th>
+              <th>ÚLTIMO REPASO</th>
+              <th>PRÓXIMO</th>
+              <th>URGENCIA</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="topicsBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="review-panel" id="reviewPanel">
+      <div class="review-title">📋 Temas más urgentes de repasar</div>
+      <div class="review-cards" id="reviewCards"></div>
+    </div>
+  </main>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════════
+// DATA
+// ══════════════════════════════════════════════════════════
+const SUBJECTS = [
+  { id:"mates",  icon:"∑", name:"Ampliación de Matemáticas" },
+  { id:"calor",  icon:"🌡", name:"Transferencia de Calor" },
+  { id:"dibujo", icon:"✏", name:"Dibujo" },
+  { id:"electr", icon:"⚡", name:"Electricidad" },
+  { id:"auto",   icon:"⚙", name:"Automática" },
+  { id:"fluids", icon:"〜", name:"Fluidos 2" },
+  { id:"fabr",   icon:"🔧", name:"Ingeniería de Fabricación" },
+  { id:"elast",  icon:"△", name:"Elasticidad y Resistencia de Materiales" }
+];
+
+const SAMPLE = {
+  mates:  ["Series de Fourier","Transformada de Laplace","Ecuaciones diferenciales","Variable compleja","Series de Taylor","Transformada Z","Espacios vectoriales","Cálculo variacional","Operadores diferenciales","Funciones de Bessel"],
+  calor:  ["Conducción estacionaria","Conducción transitoria","Convección forzada","Convección natural","Radiación térmica","Intercambiadores de calor","Aletas","Factor de forma","Resistencia térmica","Capa límite térmica"],
+  dibujo: ["Vistas normalizadas","Cortes y secciones","Tolerancias geométricas","Roscas y tornillos","Acotación","Perspectiva isométrica","Engranajes","Soldaduras","Ajustes dimensionales","Planos de conjunto"],
+  electr: ["Circuitos CC","Circuitos CA","Teorema de Thevenin","Resonancia RLC","Transformadores","Máquinas de CC","Motores asíncronos","Semiconductores","Amplificadores","Filtros"],
+  auto:   ["Función de transferencia","Diagrama de Bode","Lugar de las raíces","Controlador PID","Estabilidad Routh","Criterio de Nyquist","Espacio de estados","Controlabilidad","Control digital","Sistemas no lineales"],
+  fluids: ["Ecuación de Navier-Stokes","Capa límite laminar","Capa límite turbulenta","Flujo compresible","Ondas de choque","Perfiles aerodinámicos","Flujo en toberas","Número de Mach","Aerodinámica subsónica","Flujo potencial"],
+  fabr:   ["Mecanizado","Fundición","Conformado","Soldadura","Tratamientos térmicos","Control de calidad","Tolerancias de fabricación","Materiales metálicos","Polímeros industriales","Fabricación aditiva"],
+  elast:  ["Tensión y deformación","Ley de Hooke generalizada","Flexión pura","Cortante en vigas","Torsión","Pandeo de Euler","Criterios de fallo","Fatiga","Tensiones planas","Círculo de Mohr"]
+};
+
+function makeTopic(name) {
+  return { id: crypto.randomUUID(), name, star:false, enClase:false, estudiado:false, repasos:0, confianza:"", lastRepaso:"" };
+}
+
+let state = {};
+let currentSubj = SUBJECTS[0].id;
+let viewingReview = false;
+let saveTimer = null;
+let firebaseOk = false;
+let _ignoreSnapshot = false;
+
+function initState() {
+  state = {};
+  SUBJECTS.forEach(s => {
+    state[s.id] = { topics: SAMPLE[s.id].map(makeTopic) };
+  });
+}
+
+// ── SM-2 SIMPLIFIED ──
+function getInterval(confianza, repasos) {
+  if (confianza === "Bajo" || !confianza) return [1,2,3][Math.min(repasos,2)];
+  if (confianza === "Medio") return [3,5,7,10][Math.min(repasos,3)];
+  return [5,10,14,21][Math.min(repasos,3)];
+}
+function getUrgencia(topic) {
+  const { confianza, repasos, lastRepaso } = topic;
+  if (!lastRepaso) {
+    if (!confianza || confianza === "Bajo") return "urgente";
+    if (confianza === "Medio") return "pronto";
+    return "aldia";
+  }
+  const last = new Date(lastRepaso);
+  const today = new Date(); today.setHours(0,0,0,0);
+  const diff = Math.floor((today - last) / 86400000);
+  const interval = getInterval(confianza, repasos);
+  const remaining = interval - diff;
+  if (remaining <= 0) return "urgente";
+  if (remaining <= 2) return "pronto";
+  return "aldia";
+}
+function getNextRepaso(topic) {
+  if (!topic.lastRepaso) return null;
+  const last = new Date(topic.lastRepaso);
+  const interval = getInterval(topic.confianza, topic.repasos);
+  const next = new Date(last); next.setDate(next.getDate() + interval);
+  return next;
+}
+function formatDate(d) {
+  if (!d) return "—";
+  const dd = String(d.getDate()).padStart(2,"0");
+  const mm = String(d.getMonth()+1).padStart(2,"0");
+  const yy = d.getFullYear();
+  return `${dd}/${mm}/${yy}`;
+}
+function daysUntil(d) {
+  if (!d) return null;
+  const today = new Date(); today.setHours(0,0,0,0);
+  return Math.ceil((d - today) / 86400000);
+}
+
+// ── PROGRESS ──
+function calcProgress(subjId) {
+  const topics = state[subjId].topics;
+  if (!topics.length) return { pct:0, done:0, total:0 };
+  let pts = 0;
+  let done = 0;
+  topics.forEach(t => {
+    let tp = (t.enClase?1:0) + (t.estudiado?1:0) + (t.repasos>0?1:0);
+    pts += tp;
+    if (tp === 3) done++;
+  });
+  return { pct: Math.round(pts / (topics.length*3) * 100), done, total: topics.length };
+}
+
+// ── SAVE ──
+function scheduleSave() {
+  setStatus("saving");
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(doSave, 800);
+}
+async function doSave() {
+  localStorage.setItem("tracker-miguel-v3", JSON.stringify(state));
+  if (firebaseOk && window._saveToCloud) {
+    _ignoreSnapshot = true;
+    await window._saveToCloud(state);
+    setTimeout(() => { _ignoreSnapshot = false; }, 2000);
+  }
+  setStatus("synced");
+}
+function setStatus(s) {
+  const dot = document.getElementById("statusDot");
+  const txt = document.getElementById("statusText");
+  dot.className = "status-dot " + s;
+  txt.textContent = s === "synced" ? "guardado ✓" : s === "saving" ? "guardando…" : s === "offline" ? "sin conexión" : "local";
+}
+
+// ── LOAD ──
+async function loadData() {
+  let loaded = false;
+  if (firebaseOk && window._loadFromCloud) {
+    const cloud = await window._loadFromCloud();
+    if (cloud) { state = cloud; loaded = true; setStatus("synced"); }
+  }
+  if (!loaded) {
+    const local = localStorage.getItem("tracker-miguel-v3");
+    if (local) { try { state = JSON.parse(local); loaded = true; } catch(e){} }
+  }
+  if (!loaded) initState();
+  // ensure all subjects exist
+  SUBJECTS.forEach(s => { if (!state[s.id]) state[s.id] = { topics: SAMPLE[s.id].map(makeTopic) }; });
+}
+
+// ══════════════════════════════════════════════════════════
+// RENDER
+// ══════════════════════════════════════════════════════════
+function renderSidebar() {
+  const list = document.getElementById("subjectList");
+  list.innerHTML = "";
+  SUBJECTS.forEach(s => {
+    const { pct } = calcProgress(s.id);
+    const btn = document.createElement("button");
+    btn.className = "subject-btn" + (s.id === currentSubj && !viewingReview ? " active" : "");
+    btn.innerHTML = `<span class="subj-icon">${s.icon}</span><span class="subj-name">${s.name}</span><span class="subj-pct">${pct}%</span>`;
+    btn.onclick = () => { currentSubj = s.id; viewingReview = false; render(); closeSidebar(); };
+    list.appendChild(btn);
+  });
+  // urgent badge
+  let urgentCount = 0;
+  SUBJECTS.forEach(s => {
+    state[s.id].topics.forEach(t => { if(getUrgencia(t)==="urgente") urgentCount++; });
+  });
+  const badge = document.getElementById("urgentBadge");
+  badge.textContent = urgentCount;
+  badge.style.display = urgentCount > 0 ? "inline" : "none";
+  document.getElementById("reviewToggleBtn").className = "sidebar-review-btn" + (viewingReview ? " active" : "");
+}
+
+function renderProgress() {
+  const { pct, done, total } = calcProgress(currentSubj);
+  const fill = document.getElementById("progressFill");
+  const pctEl = document.getElementById("progressPct");
+  const detail = document.getElementById("progressDetail");
+  fill.style.width = pct + "%";
+  fill.className = "progress-bar-fill" + (pct >= 100 ? " green" : pct >= 60 ? " orange" : "");
+  pctEl.textContent = pct + "%";
+  detail.textContent = `${done} / ${total} temas completos`;
+}
+
+function renderTopics() {
+  const subj = SUBJECTS.find(s => s.id === currentSubj);
+  document.getElementById("subjectTitle").textContent = subj.icon + "  " + subj.name;
+  renderProgress();
+
+  const tbody = document.getElementById("topicsBody");
+  tbody.innerHTML = "";
+
+  const topics = state[currentSubj].topics;
+  topics.forEach((t, idx) => {
+    const urg = getUrgencia(t);
+    const next = getNextRepaso(t);
+    const nextStr = formatDate(next);
+    const days = daysUntil(next);
+    let whenLabel = "—";
+    if (days !== null) {
+      if (days <= 0) whenLabel = "Hoy";
+      else if (days === 1) whenLabel = "Mañana";
+      else whenLabel = `En ${days}d`;
+    }
+
+    const tr = document.createElement("tr");
+    tr.dataset.idx = idx;
+    if (t.star) tr.classList.add("important-row");
+
+    tr.innerHTML = `
+      <td>
+        <button class="star-btn ${t.star ? 'on' : ''}" data-action="star">${t.star ? "★" : "☆"}</button>
+      </td>
+      <td>
+        <span class="topic-name" data-action="editName">${escHtml(t.name)}</span>
+      </td>
+      <td>
+        <button class="check-btn ${t.enClase ? 'checked-green' : ''}" data-action="enClase">
+          ${t.enClase ? "✓" : ""}
+        </button>
+      </td>
+      <td>
+        <button class="check-btn ${t.estudiado ? 'checked-orange' : ''}" data-action="estudiado">
+          ${t.estudiado ? "✓" : ""}
+        </button>
+      </td>
+      <td>
+        <button class="repaso-btn" data-action="repaso">
+          🕐 <span class="repaso-count">${t.repasos}</span>
+        </button>
+      </td>
+      <td>
+        <select class="conf-select ${(t.confianza||'').toLowerCase()}" data-action="confianza">
+          <option value="">—</option>
+          <option value="Bajo"  ${t.confianza==="Bajo"  ?"selected":""}>Bajo</option>
+          <option value="Medio" ${t.confianza==="Medio" ?"selected":""}>Medio</option>
+          <option value="Alto"  ${t.confianza==="Alto"  ?"selected":""}>Alto</option>
+        </select>
+      </td>
+      <td>
+        <input type="date" class="conf-select date-cell" data-action="lastRepaso"
+          value="${t.lastRepaso || ''}"
+          style="font-family:var(--mono);font-size:11px;padding:4px 8px;color:var(--text2);">
+      </td>
+      <td class="date-cell">${nextStr} <span style="color:var(--text3);font-size:10px;">${t.lastRepaso ? '('+whenLabel+')' : ''}</span></td>
+      <td>
+        <span class="urgencia-badge ${urg}">${
+          urg==="urgente" ? "🔴 Urgente" :
+          urg==="pronto"  ? "🟡 Pronto"  :
+          urg==="aldia"   ? "🟢 Al día"  : "—"
+        }</span>
+      </td>
+      <td>
+        <button class="del-btn" data-action="delete" title="Eliminar">✕</button>
+      </td>
+    `;
+
+    // Events
+    tr.querySelector("[data-action='star']").onclick = () => { t.star = !t.star; renderAll(); scheduleSave(); };
+    tr.querySelector("[data-action='enClase']").onclick = () => { t.enClase = !t.enClase; renderAll(); scheduleSave(); };
+    tr.querySelector("[data-action='estudiado']").onclick = () => { t.estudiado = !t.estudiado; renderAll(); scheduleSave(); };
+    tr.querySelector("[data-action='repaso']").onclick = () => {
+      t.repasos++;
+      t.lastRepaso = new Date().toISOString().split("T")[0];
+      tr.classList.add("flash-green");
+      setTimeout(() => tr.classList.remove("flash-green"), 650);
+      renderAll(); scheduleSave();
+    };
+    tr.querySelector("[data-action='confianza']").onchange = (e) => {
+      t.confianza = e.target.value;
+      e.target.className = "conf-select " + (e.target.value || "").toLowerCase();
+      renderAll(); scheduleSave();
+    };
+    tr.querySelector("[data-action='lastRepaso']").onchange = (e) => {
+      t.lastRepaso = e.target.value;
+      renderAll(); scheduleSave();
+    };
+    tr.querySelector("[data-action='editName']").ondblclick = (e) => {
+      const span = e.target;
+      const input = document.createElement("input");
+      input.className = "topic-edit";
+      input.value = t.name;
+      span.replaceWith(input);
+      input.focus();
+      const save = () => { t.name = input.value || t.name; renderAll(); scheduleSave(); };
+      input.onblur = save;
+      input.onkeydown = (ev) => { if (ev.key==="Enter") { save(); ev.preventDefault(); } };
+    };
+    tr.querySelector("[data-action='delete']").onclick = () => {
+      if (confirm(`¿Eliminar "${t.name}"?`)) {
+        state[currentSubj].topics.splice(idx, 1);
+        renderAll(); scheduleSave();
+      }
+    };
+
+    tbody.appendChild(tr);
+  });
+}
+
+function renderReview() {
+  const cards = document.getElementById("reviewCards");
+  cards.innerHTML = "";
+
+  // Gather all topics with urgency
+  const all = [];
+  SUBJECTS.forEach(s => {
+    state[s.id].topics.forEach(t => {
+      if (!t.name) return;
+      const urg = getUrgencia(t);
+      const next = getNextRepaso(t);
+      const days = daysUntil(next);
+      const urgOrder = urg==="urgente"?0:urg==="pronto"?1:2;
+      all.push({ t, urg, urgOrder, days, subjName: s.name });
+    });
+  });
+  all.sort((a,b) => a.urgOrder - b.urgOrder || (a.days??99) - (b.days??99));
+  const top7 = all.slice(0,7);
+
+  if (!top7.length) {
+    cards.innerHTML = '<div class="review-empty">🎉 Todo al día — no hay temas urgentes</div>';
+    return;
+  }
+
+  top7.forEach(({ t, urg, days }) => {
+    let whenLabel = "—";
+    if (days !== null) {
+      if (days <= 0) whenLabel = "Hoy";
+      else if (days === 1) whenLabel = "Mañana";
+      else whenLabel = `En ${days} días`;
+    } else {
+      whenLabel = "Sin repasar";
+    }
+    const card = document.createElement("div");
+    card.className = "review-card";
+    card.innerHTML = `
+      <div>
+        <div class="review-card-top">
+          ${t.star ? '<span style="color:var(--gold2);font-size:14px;">★</span>' : ''}
+          <span class="review-card-name">${escHtml(t.name)}</span>
+          <span class="urgencia-badge ${urg}">${
+            urg==="urgente"?"🔴 Urgente":urg==="pronto"?"🟡 Pronto":"🟢 Al día"
+          }</span>
+        </div>
+        <div class="review-card-subj" style="margin-top:4px;">
+          ${t.star ? "⭐ Importante · " : ""}Repasos: ${t.repasos} · Confianza: ${t.confianza||"—"}
+        </div>
+      </div>
+      <div class="review-card-when">${whenLabel}</div>
+    `;
+    cards.appendChild(card);
+  });
+}
+
+function renderAll() {
+  renderSidebar();
+  if (viewingReview) {
+    document.getElementById("subjectView").style.display = "none";
+    document.getElementById("reviewPanel").classList.add("active");
+    renderReview();
+  } else {
+    document.getElementById("subjectView").style.display = "";
+    document.getElementById("reviewPanel").classList.remove("active");
+    renderTopics();
+  }
+}
+
+function escHtml(s) {
+  return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
+// ══════════════════════════════════════════════════════════
+// CONTROLS
+// ══════════════════════════════════════════════════════════
+document.getElementById("addTopicBtn").onclick = () => {
+  const name = prompt("Nombre del nuevo tema:");
+  if (!name) return;
+  state[currentSubj].topics.push(makeTopic(name));
+  renderAll(); scheduleSave();
+};
+
+document.getElementById("sortStarsBtn").onclick = () => {
+  state[currentSubj].topics.sort((a,b) => (b.star?1:0) - (a.star?1:0));
+  renderAll(); scheduleSave();
+};
+
+document.getElementById("reviewToggleBtn").onclick = () => {
+  viewingReview = !viewingReview;
+  renderAll();
+};
+
+document.getElementById("menuBtn").onclick = () => {
+  document.getElementById("sidebar").classList.toggle("open");
+};
+
+function closeSidebar() {
+  document.getElementById("sidebar").classList.remove("open");
+}
+
+// ══════════════════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════════════════
+async function init() {
+  // Wait up to 3s for Firebase
+  await new Promise(resolve => {
+    if (window._firebaseReady) { firebaseOk = true; resolve(); return; }
+    const handler = () => { firebaseOk = true; resolve(); };
+    document.addEventListener("firebase-ready", handler, { once: true });
+    setTimeout(() => { resolve(); }, 3000);
+  });
+
+  if (!firebaseOk || !window._saveToCloud) {
+    document.getElementById("firebaseWarning").classList.add("show");
+    setStatus("offline");
+  } else {
+    setStatus("saving");
+    // Real-time listener
+    window._listenCloud && window._listenCloud((data) => {
+      if (_ignoreSnapshot) return;
+      state = data;
+      SUBJECTS.forEach(s => { if (!state[s.id]) state[s.id] = { topics: SAMPLE[s.id].map(makeTopic) }; });
+      renderAll();
+      setStatus("synced");
+    });
+  }
+
+  await loadData();
+  renderAll();
+}
+
+init();
+</script>
+</body>
+</html>
