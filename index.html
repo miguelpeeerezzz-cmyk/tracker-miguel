@@ -11,9 +11,6 @@
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
   import { getFirestore, doc, setDoc, getDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
-  // ══════════════════════════════════════════════
-  // CONFIGURACIÓN FIREBASE — RELLENA ESTOS VALORES
-  // ══════════════════════════════════════════════
   const firebaseConfig = {
     apiKey:            "AIzaSyD7U3kufM1SJY7iD7L4N6kErYV2Xm6Kbok",
     authDomain:        "tracker-miguel.firebaseapp.com",
@@ -22,7 +19,6 @@
     messagingSenderId: "914863873073",
     appId:             "1:914863873073:web:58fc8c2a1483261e908910"
   };
-
 
   const app = initializeApp(firebaseConfig);
   const db  = getFirestore(app);
@@ -596,6 +592,40 @@ tr:hover .del-btn { opacity: 1; }
   font-size: 16px;
 }
 
+/* ─── CONFIRM MODAL ─── */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  z-index: 999;
+  align-items: center;
+  justify-content: center;
+}
+.modal-overlay.show { display: flex; }
+.modal-box {
+  background: var(--panel);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius2);
+  padding: 24px 28px;
+  max-width: 340px;
+  width: 90%;
+  box-shadow: 0 24px 48px rgba(0,0,0,0.5);
+}
+.modal-title { font-family: var(--mono); font-size: 13px; color: var(--text); margin-bottom: 8px; }
+.modal-msg   { font-size: 13px; color: var(--text2); margin-bottom: 20px; line-height: 1.5; }
+.modal-btns  { display: flex; gap: 10px; justify-content: flex-end; }
+.modal-btn-cancel {
+  padding: 8px 16px; border-radius: var(--radius); border: 1px solid var(--border2);
+  background: var(--bg3); color: var(--text2); font-family: var(--sans); font-size: 13px; cursor: pointer;
+}
+.modal-btn-confirm {
+  padding: 8px 16px; border-radius: var(--radius); border: 1px solid rgba(239,68,68,0.4);
+  background: rgba(239,68,68,0.15); color: var(--red2); font-family: var(--sans);
+  font-size: 13px; cursor: pointer; font-weight: 600;
+}
+.modal-btn-confirm:hover { background: rgba(239,68,68,0.25); }
+
 /* ─── SCROLLBAR ─── */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -680,6 +710,18 @@ tr:hover .del-btn { opacity: 1; }
       <div class="review-cards" id="reviewCards"></div>
     </div>
   </main>
+</div>
+
+<!-- CONFIRM MODAL -->
+<div class="modal-overlay" id="confirmModal">
+  <div class="modal-box">
+    <div class="modal-title">⚠ Confirmar eliminación</div>
+    <div class="modal-msg" id="confirmMsg"></div>
+    <div class="modal-btns">
+      <button class="modal-btn-cancel" id="confirmCancel">Cancelar</button>
+      <button class="modal-btn-confirm" id="confirmOk">Eliminar</button>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -961,10 +1003,10 @@ function renderTopics() {
       input.onkeydown = (ev) => { if (ev.key==="Enter") { save(); ev.preventDefault(); } };
     };
     tr.querySelector("[data-action='delete']").onclick = () => {
-      if (confirm(`¿Eliminar "${t.name}"?`)) {
+      customConfirm(`¿Eliminar "${t.name}"?`, () => {
         state[currentSubj].topics.splice(idx, 1);
         renderAll(); scheduleSave();
-      }
+      });
     };
 
     tbody.appendChild(tr);
@@ -1040,6 +1082,19 @@ function renderAll() {
 
 function escHtml(s) {
   return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
+// ── CUSTOM CONFIRM ──
+function customConfirm(msg, onOk) {
+  const overlay = document.getElementById("confirmModal");
+  document.getElementById("confirmMsg").textContent = msg;
+  overlay.classList.add("show");
+  const ok = document.getElementById("confirmOk");
+  const cancel = document.getElementById("confirmCancel");
+  const close = () => overlay.classList.remove("show");
+  ok.onclick = () => { close(); onOk(); };
+  cancel.onclick = close;
+  overlay.onclick = (e) => { if (e.target === overlay) close(); };
 }
 
 // ══════════════════════════════════════════════════════════
